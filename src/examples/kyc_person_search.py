@@ -1,11 +1,7 @@
-"""KYC Person Search Agent - Gathers due diligence information on individuals.
-
-This agent searches for publicly available information relevant to KYC
-(Know Your Customer) compliance checks. It gathers information but does NOT
-make determinations - that's for compliance analysts to review.
+"""KYC Person Search Agent.
 
 Usage:
-    uv run python -m src.examples.kyc_person_search "John Smith, CEO of Acme Corp"
+    uv run --env-file .env python -m src.examples.kyc_person_search "John Smith, CEO of Acme Corp"
 """
 
 import asyncio
@@ -131,18 +127,13 @@ class MessagesState(TypedDict):
     """State for the KYC search agent graph."""
 
     messages: Annotated[list[AnyMessage], operator.add]
-    loop_count: int
-
-
-MAX_LOOPS = 5  # Safety limit
 
 
 async def llm_call(state: MessagesState) -> dict:
     """LLM decides whether to call a tool or not."""
-    loop_count = state.get("loop_count", 0) + 1
     messages = [SystemMessage(content=SYSTEM_MESSAGE)] + state["messages"]
     response = await model_with_tools.ainvoke(messages)
-    return {"messages": [response], "loop_count": loop_count}
+    return {"messages": [response]}
 
 
 async def tool_node(state: MessagesState) -> dict:
@@ -158,15 +149,9 @@ async def tool_node(state: MessagesState) -> dict:
 
 def should_continue(state: MessagesState) -> str:
     """Decide if we should continue the loop or stop."""
-    loop_count = state.get("loop_count", 0)
-
-    if loop_count >= MAX_LOOPS:
-        return END
-
     last_message: AIMessage = state["messages"][-1]  # type: ignore[assignment]
     if last_message.tool_calls:
         return "tool_node"
-
     return END
 
 
@@ -187,7 +172,6 @@ agent = agent_builder.compile()
 
 
 async def main():
-    """CLI entrypoint."""
     if len(sys.argv) < 2:
         print("Usage: uv run python -m src.examples.kyc_person_search '<person name>'")
         print("Example: uv run python -m src.examples.kyc_person_search 'John Smith, CEO of Acme Corp'")
@@ -200,7 +184,7 @@ async def main():
     print(f"{'='*60}\n")
 
     messages = [HumanMessage(content=f"Research this person for KYC compliance: {subject}")]
-    result = await agent.ainvoke({"messages": messages, "loop_count": 0})  # type: ignore[arg-type]
+    result = await agent.ainvoke({"messages": messages})
     print(result["messages"][-1].content)
 
 
