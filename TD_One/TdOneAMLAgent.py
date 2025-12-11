@@ -1,15 +1,12 @@
-from openai import OpenAI
+import asyncio
+from typing import Any, Dict, List, TypedDict
+
 from dotenv import load_dotenv
-from typing import TypedDict, Dict, Any, List
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
+from openai import OpenAI
 
+from TD_One.kyc_web_search import run_kyc_web_search
 
-from src.utils import (
-    AsyncWeaviateKnowledgeBase,
-    Configs,
-    get_weaviate_async_client,
-    pretty_print,
-)
 
 load_dotenv(verbose=True)
 
@@ -40,14 +37,18 @@ def node_kyc(state: AMLState) -> Dict[str, Any]:
     return {"kyc": kyc}
 
 
-def node_websearch(state: AMLState) -> Dict[str, Any]:
-    kyc = state["kyc"]
+async def node_websearch(state: AMLState) -> Dict[str, Any]:
+    """Run KYC web search on the customer."""
+    txn = state["transaction"]
+    customer_name = txn.get("customer_name", "")
 
-    websearch = {
-        
-    }
+    if not customer_name:
+        return {"websearch": {"error": "No customer name provided", "results": ""}}
 
-    return {"websearch": websearch}
+    # Run the KYC web search
+    search_results = await run_kyc_web_search(customer_name)
+
+    return {"websearch": {"results": search_results}}
 
 
 def node_risk_score(state: AMLState) -> Dict[str, Any]:
@@ -83,7 +84,7 @@ def node_policycheck(state: AMLState) -> Dict[str, Any]:
     websearch = state["websearch"]
 
     policycheck = {
-        
+
     }
 
     return {"policycheck": policycheck}
@@ -138,15 +139,22 @@ flagged_txn = {
         "txn_id": "T9912",
         "amount": 15000,
         "country": "AE",
-        "customer_id": "C112"
+        "customer_id": "C112",
+        "customer_name": "John Smith, CEO of Acme Corp",  # Name for KYC search
     },
     "kyc": {},
     "websearch": {},
     "risk_score": 0.0,
     "alerts": [],
     "policycheck": {},
-    "explanation": ""
+    "explanation": "",
 }
 
-result = aml_graph.invoke(flagged_txn)
-print(result)
+
+async def main():
+    result = await aml_graph.ainvoke(flagged_txn)
+    print(result)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
