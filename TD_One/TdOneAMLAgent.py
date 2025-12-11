@@ -22,12 +22,11 @@ class AMLState(TypedDict):
     explanation: str
 
 
-
-####### Node 1: KYC #######
 def node_kyc(state: AMLState) -> Dict[str, Any]:
     txn = state["transaction"]
 
     kyc = {
+        "customer_name": "Elon Musk",
         "high_risk_country": txn.get("country") in ["AB", "CD", "EF"],
         "amount_usd": float(txn.get("amount", 0)),
         "customer_risk_segment": "HNW" if txn.get("amount", 0) > 10000 else "Regular"
@@ -38,8 +37,8 @@ def node_kyc(state: AMLState) -> Dict[str, Any]:
 
 async def node_websearch(state: AMLState) -> Dict[str, Any]:
     """Run KYC web search on the customer."""
-    txn = state["transaction"]
-    customer_name = txn.get("customer_name", "")
+    kyc = state["kyc"]
+    customer_name = kyc.get("customer_name", "")
 
     if not customer_name:
         return {"websearch": {"error": "No customer name provided", "results": ""}}
@@ -137,8 +136,7 @@ flagged_txn = {
         "txn_id": "T9912",
         "amount": 15000,
         "country": "AE",
-        "customer_id": "C112",
-        "customer_name": "John Smith, CEO of Acme Corp",
+        "customer_id": "C112"
     },
     "kyc": {},
     "websearch": {},
