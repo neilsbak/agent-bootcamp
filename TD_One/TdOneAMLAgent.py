@@ -1,15 +1,11 @@
+import asyncio
+
 from openai import OpenAI
 from dotenv import load_dotenv
 from typing import TypedDict, Dict, Any, List
 from langgraph.graph import StateGraph, END
 
-
-from src.utils import (
-    AsyncWeaviateKnowledgeBase,
-    Configs,
-    get_weaviate_async_client,
-    pretty_print,
-)
+from TD_One.kyc_web_search import run_kyc_web_search
 
 load_dotenv(verbose=True)
 
@@ -26,12 +22,11 @@ class AMLState(TypedDict):
     explanation: str
 
 
-
-####### Node 1: KYC #######
 def node_kyc(state: AMLState) -> Dict[str, Any]:
     txn = state["transaction"]
 
     kyc = {
+        "customer_name": "Elon Musk",
         "high_risk_country": txn.get("country") in ["AB", "CD", "EF"],
         "amount_usd": float(txn.get("amount", 0)),
         "customer_risk_segment": "HNW" if txn.get("amount", 0) > 10000 else "Regular"
@@ -40,14 +35,17 @@ def node_kyc(state: AMLState) -> Dict[str, Any]:
     return {"kyc": kyc}
 
 
-def node_websearch(state: AMLState) -> Dict[str, Any]:
+async def node_websearch(state: AMLState) -> Dict[str, Any]:
+    """Run KYC web search on the customer."""
     kyc = state["kyc"]
+    customer_name = kyc.get("customer_name", "")
 
-    websearch = {
-        
-    }
+    if not customer_name:
+        return {"websearch": {"error": "No customer name provided", "results": ""}}
 
-    return {"websearch": websearch}
+    search_results = await run_kyc_web_search(customer_name)
+
+    return {"websearch": {"results": search_results}}
 
 
 def node_risk_score(state: AMLState) -> Dict[str, Any]:
@@ -83,7 +81,7 @@ def node_policycheck(state: AMLState) -> Dict[str, Any]:
     websearch = state["websearch"]
 
     policycheck = {
-        
+
     }
 
     return {"policycheck": policycheck}
@@ -148,5 +146,11 @@ flagged_txn = {
     "explanation": ""
 }
 
-result = aml_graph.invoke(flagged_txn)
-print(result)
+
+async def main():
+    result = await aml_graph.ainvoke(flagged_txn)
+    print(result)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
