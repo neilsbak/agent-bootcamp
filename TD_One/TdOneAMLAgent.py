@@ -1,12 +1,11 @@
 import asyncio
-from typing import Any, Dict, List, TypedDict
 
-from dotenv import load_dotenv
-from langgraph.graph import END, StateGraph
 from openai import OpenAI
+from dotenv import load_dotenv
+from typing import TypedDict, Dict, Any, List
+from langgraph.graph import StateGraph, END
 
 from TD_One.kyc_web_search import run_kyc_web_search
-
 
 load_dotenv(verbose=True)
 
@@ -45,7 +44,6 @@ async def node_websearch(state: AMLState) -> Dict[str, Any]:
     if not customer_name:
         return {"websearch": {"error": "No customer name provided", "results": ""}}
 
-    # Run the KYC web search
     search_results = await run_kyc_web_search(customer_name)
 
     return {"websearch": {"results": search_results}}
@@ -140,14 +138,14 @@ flagged_txn = {
         "amount": 15000,
         "country": "AE",
         "customer_id": "C112",
-        "customer_name": "John Smith, CEO of Acme Corp",  # Name for KYC search
+        "customer_name": "John Smith, CEO of Acme Corp",
     },
     "kyc": {},
     "websearch": {},
     "risk_score": 0.0,
     "alerts": [],
     "policycheck": {},
-    "explanation": "",
+    "explanation": ""
 }
 
 
