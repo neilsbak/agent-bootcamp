@@ -2,6 +2,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from typing import TypedDict, Dict, Any, List
 from langgraph.graph import StateGraph, END
+import pandas as pd
 
 
 from src.utils import (
@@ -14,6 +15,31 @@ from src.utils import (
 load_dotenv(verbose=True)
 
 client = OpenAI()
+
+def load_kyc_dataset(client_id: int) -> pd.DataFrame:
+    ##Synthetic Data True Positives 
+    SPREADSHEET_ID = '13DIJXTjGcm34Xf6e7APsGd1hkNc_hfSTIwNCRhF6tNg' 
+    GID_clientdata = '466321727'
+    GID_transaction = '681908835' 
+    url_clientdata = f'https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?gid={GID_clientdata}&format=csv'
+    url_transaction = f'https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?gid={GID_transaction}&format=csv'
+
+    try:
+        df_clientdata = pd.read_csv(url_clientdata)
+    except Exception as e:
+        print(f"Error reading public sheet: {e}")
+        
+    try:
+        df_transaction = pd.read_csv(url_transaction)
+    except Exception as e:
+        print(f"Error reading public sheet: {e}")
+
+    # Merge datasets on 'client_id'
+    ###df_kyc = pd.merge(df_transaction, df_clientdata, on='client_id', how='left')
+    df_clientdata = df_clientdata.where(df_clientdata['client_id'] == client_id).dropna()
+    df_transaction = df_transaction.where(df_transaction['client_id'] == client_id).dropna()
+    return df_clientdata, df_transaction
+
 
 ####### Define State - records updates at each node ######
 class AMLState(TypedDict):
@@ -31,10 +57,18 @@ class AMLState(TypedDict):
 def node_kyc(state: AMLState) -> Dict[str, Any]:
     txn = state["transaction"]
 
+    df_client, df_transaction = load_kyc_dataset(txn.get("client_id"))
+
     kyc = {
-        "high_risk_country": txn.get("country") in ["AB", "CD", "EF"],
-        "amount_usd": float(txn.get("amount", 0)),
-        "customer_risk_segment": "HNW" if txn.get("amount", 0) > 10000 else "Regular"
+        "client_id": df_client.get("client_id").values[0],
+        "client_name": df_client.get("client_name").values[0],
+        "country": df_client.get("client_country").values[0],
+        "flag_high_risk_country": (df_client.get("fatf_country_flag").values[0]==1)|(df_client.get("ofac_country_flag").values[0]==1),
+        "flag_pep": df_client.get("pep_flag").values[0],
+        "flag_high_net_worth": df_client.get("HNW").values[0],
+        "income": df_client.get("Income").values[0],
+        "Deposit_3MonthsAvg": df_client.get("Deposit (3 months moving average)").values[0]
+        
     }
 
     return {"kyc": kyc}
